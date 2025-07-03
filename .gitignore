@@ -1,0 +1,14 @@
+# Node
+node_modules
+npm-debug.log
+.env
+
+# Build
+client/build
+server/build
+
+# VSCode
+.vscode
+
+# System
+.DS_Store
