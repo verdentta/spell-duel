@@ -8,35 +8,44 @@ function LobbyPage() {
 
   const [screenName, setScreenName] = useState('');
   const [users, setUsers] = useState([]);
-  const [hasJoined, setHasJoined] = useState(false); // Track if user has joined
+  const [hasJoined, setHasJoined] = useState(false);
+  const [isGameStarted, setIsGameStarted] = useState(false);
+  const [hostId, setHostId] = useState('');
 
-  // Handle screen name from navigate() if available
   useEffect(() => {
     if (location.state && location.state.screenName) {
       setScreenName(location.state.screenName);
-      setHasJoined(true); 
+      setHasJoined(true);
     }
   }, [location]);
 
-  // Join lobby only when screenName is set and hasn't joined yet
   useEffect(() => {
     if (screenName && hasJoined) {
       socket.emit('join_lobby', { lobbyCode, screenName });
     }
   }, [screenName, lobbyCode, hasJoined]);
 
-  // Listen for lobby user updates
   useEffect(() => {
-    socket.on('lobby_users', (userList) => {
-      setUsers(userList);
+    socket.on('lobby_users', ({ users, hostId }) => {
+      setUsers(users);
+      setHostId(hostId);
+    });
+
+    socket.on('game_started', () => {
+      setIsGameStarted(true);
+    });
+
+    socket.on('game_ended', () => {
+      setIsGameStarted(false);
     });
 
     return () => {
       socket.off('lobby_users');
+      socket.off('game_started');
+      socket.off('game_ended');
     };
   }, []);
 
-  // Handle manual screen name submission
   const handleNameSubmit = (e) => {
     e.preventDefault();
     if (!screenName.trim()) {
@@ -46,7 +55,8 @@ function LobbyPage() {
     setHasJoined(true);
   };
 
-  // If user hasn't joined yet, show name input form
+  const isHost = socket.id === hostId;
+
   if (!hasJoined) {
     return (
       <div style={{ textAlign: 'center', marginTop: '100px' }}>
@@ -68,27 +78,53 @@ function LobbyPage() {
     );
   }
 
-  // Normal lobby view after joining
   return (
     <div style={{ textAlign: 'center', marginTop: '50px' }}>
-      <h1>Lobby: {lobbyCode}</h1>
-      <h2>Welcome, {screenName}</h2>
+      {!isGameStarted && (
+        <>
+          <h1>Lobby: {lobbyCode}</h1>
+          <h2>Welcome, {screenName}</h2>
 
-      <p>Invite friends to join:</p>
-      <input
-        type="text"
-        readOnly
-        value={`${window.location.origin}/lobby/${lobbyCode}`}
-        style={{ width: '300px', padding: '10px' }}
-      />
-      <br /><br />
+          <p>Invite friends to join:</p>
+          <input
+            type="text"
+            readOnly
+            value={`${window.location.origin}/lobby/${lobbyCode}`}
+            style={{ width: '300px', padding: '10px' }}
+          />
+          <br /><br />
 
-      <button
-        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/lobby/${lobbyCode}`)}
-        style={{ padding: '10px 20px' }}
-      >
-        Copy Invite Link
-      </button>
+          <button
+            onClick={() => navigator.clipboard.writeText(`${window.location.origin}/lobby/${lobbyCode}`)}
+            style={{ padding: '10px 20px' }}
+          >
+            Copy Invite Link
+          </button>
+          <br /><br />
+
+          {isHost && (
+            <button onClick={() => socket.emit('start_game', { lobbyCode })}>
+              Start Game
+            </button>
+          )}
+        </>
+      )}
+
+      {isGameStarted && (
+        <>
+          <img src="https://cdn-icons-png.flaticon.com/512/727/727269.png" alt="Audio" width="100" />
+          <br />
+          <button>Repeat</button>
+          <br /><br />
+          <input type="text" placeholder="User input box" />
+          <br /><br />
+          {isHost && (
+            <button onClick={() => socket.emit('end_game', { lobbyCode })}>
+              End Game
+            </button>
+          )}
+        </>
+      )}
 
       <hr style={{ margin: '40px 0' }} />
 

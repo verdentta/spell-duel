@@ -9,40 +9,68 @@ app.use(cors());
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for now, restrict later for production
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
-// Lobby tracking (for now, in-memory)
-const lobbies = {}; 
+const lobbies = {}; // { lobbyCode: { users: [], hostId: '' } }
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
   socket.on('join_lobby', ({ lobbyCode, screenName }) => {
     socket.join(lobbyCode);
+
+    if (!lobbies[lobbyCode]) {
+      lobbies[lobbyCode] = { users: [], hostId: socket.id };
+      console.log(`${screenName} created lobby ${lobbyCode}`);
+    }
+
+    lobbies[lobbyCode].users.push({ id: socket.id, name: screenName });
     console.log(`${screenName} joined lobby ${lobbyCode}`);
 
-    // Track users per lobby
-    if (!lobbies[lobbyCode]) {
-      lobbies[lobbyCode] = [];
-    }
-    lobbies[lobbyCode].push({ id: socket.id, name: screenName });
+    io.to(lobbyCode).emit('lobby_users', {
+      users: lobbies[lobbyCode].users,
+      hostId: lobbies[lobbyCode].hostId
+    });
+  });
 
-    // Send updated user list to the lobby
-    io.to(lobbyCode).emit('lobby_users', lobbies[lobbyCode]);
+  socket.on('start_game', ({ lobbyCode }) => {
+    const lobby = lobbies[lobbyCode];
+    if (lobby && lobby.hostId === socket.id) {
+      io.to(lobbyCode).emit('game_started');
+      console.log(`Game started in lobby ${lobbyCode}`);
+    }
+  });
+
+  socket.on('end_game', ({ lobbyCode }) => {
+    const lobby = lobbies[lobbyCode];
+    if (lobby && lobby.hostId === socket.id) {
+      io.to(lobbyCode).emit('game_ended');
+      console.log(`Game ended in lobby ${lobbyCode}`);
+    }
   });
 
   socket.on('disconnect', () => {
     console.log('A user disconnected:', socket.id);
 
-    // Remove user from all lobbies
     for (const lobbyCode in lobbies) {
-      lobbies[lobbyCode] = lobbies[lobbyCode].filter(user => user.id !== socket.id);
-      
-      // Notify others if lobby still has users
-      io.to(lobbyCode).emit('lobby_users', lobbies[lobbyCode]);
+      const lobby = lobbies[lobbyCode];
+      lobby.users = lobby.users.filter(user => user.id !== socket.id);
+
+      if (lobby.hostId === socket.id && lobby.users.length > 0) {
+        lobby.hostId = lobby.users[0].id;
+      }
+
+      if (lobby.users.length === 0) {
+        delete lobbies[lobbyCode];
+      } else {
+        io.to(lobbyCode).emit('lobby_users', {
+          users: lobby.users,
+          hostId: lobby.hostId
+        });
+      }
     }
   });
 });
