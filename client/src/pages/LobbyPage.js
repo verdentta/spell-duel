@@ -11,6 +11,7 @@ function LobbyPage() {
   const [hasJoined, setHasJoined] = useState(false);
   const [hostId, setHostId] = useState('');
   const [currentWord, setCurrentWord] = useState('');
+  const [wordToShow, setWordToShow] = useState('');
   const [userGuess, setUserGuess] = useState('');
   const [timeLeft, setTimeLeft] = useState(20);
   const [round, setRound] = useState(0);
@@ -18,12 +19,15 @@ function LobbyPage() {
   const [gameOver, setGameOver] = useState(false);
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [isRoundActive, setIsRoundActive] = useState(false);
+  const [revealedLetters, setRevealedLetters] = useState([]);
 
   const inputRef = useRef(null);
   const timerIntervalRef = useRef(null);
+  const revealIntervalRef = useRef(null);
+  const roundEndTimeoutRef = useRef(null);
 
   useEffect(() => {
-    if (location.state && location.state.screenName) {
+    if (location.state?.screenName) {
       setScreenName(location.state.screenName);
       setHasJoined(true);
     }
@@ -42,59 +46,28 @@ function LobbyPage() {
     });
 
     socket.on('game_started', ({ word, round }) => {
-      setIsGameStarted(true);
-      setIsRoundActive(true);
-      setCurrentWord(word);
-      setUserGuess('');
-      setTimeLeft(5);
-      setRound(round);
-      setCorrectGuesser(null);
-
-      const delay = socket.id === hostId ? 1000 : 0;
-
-      setTimeout(() => {
-        playWordPronunciation(word);
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, delay);
-
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = setInterval(() => {
-        setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
+      startNewRound(word, round);
     });
 
     socket.on('correct_guess', ({ name }) => {
       setCorrectGuesser(name);
     });
 
-    socket.on('game_ended', () => {
-      setIsRoundActive(false);
-      setCurrentWord('');
-      setUserGuess('');
-      setTimeLeft(5);
-      setCorrectGuesser(null);
-
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
+    socket.on('game_ended', ({ correctGuesser, word }) => {
+      endCurrentRound(correctGuesser, word);
     });
 
     socket.on('game_over', () => {
+      cleanupTimers();
       setIsGameStarted(false);
       setIsRoundActive(false);
       setCurrentWord('');
+      setWordToShow('');
       setUserGuess('');
-      setTimeLeft(5);
+      setTimeLeft(20);
       setCorrectGuesser(null);
       setGameOver(true);
-
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
+      setRevealedLetters([]);
     });
 
     return () => {
@@ -103,8 +76,76 @@ function LobbyPage() {
       socket.off('correct_guess');
       socket.off('game_ended');
       socket.off('game_over');
+      cleanupTimers();
     };
   }, [hostId]);
+
+  useEffect(() => {
+    if (wordToShow) {
+      setRevealedLetters(new Array(wordToShow.length).fill(false));
+
+      if (revealIntervalRef.current) clearInterval(revealIntervalRef.current);
+      revealIntervalRef.current = setInterval(() => {
+        setRevealedLetters(prev => {
+          const unrevealedIndices = prev.map((val, idx) => !val ? idx : null).filter(idx => idx !== null);
+          if (unrevealedIndices.length === 0) {
+            clearInterval(revealIntervalRef.current);
+            return prev;
+          }
+          const randomIndex = unrevealedIndices[Math.floor(Math.random() * unrevealedIndices.length)];
+          const updated = [...prev];
+          updated[randomIndex] = true;
+          return updated;
+        });
+      }, 4000);
+    }
+  }, [wordToShow]);
+
+  const startNewRound = (word, roundNumber) => {
+    cleanupTimers();
+
+    setIsGameStarted(true);
+    setIsRoundActive(true);
+    setCurrentWord(word);
+    setWordToShow(word);
+    setUserGuess('');
+    setTimeLeft(20);
+    setRound(roundNumber);
+    setCorrectGuesser(null);
+
+    const delay = socket.id === hostId ? 1000 : 0;
+
+    setTimeout(() => {
+      playWordPronunciation(word);
+      inputRef.current?.focus();
+    }, delay);
+
+    timerIntervalRef.current = setInterval(() => {
+      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+  };
+
+  const endCurrentRound = (correctGuesser, word) => {
+    setIsRoundActive(false);
+    setCorrectGuesser(correctGuesser || null);
+    setWordToShow(word);
+    setRevealedLetters(new Array(word.length).fill(true));
+
+    clearInterval(revealIntervalRef.current);
+    clearInterval(timerIntervalRef.current);
+
+    roundEndTimeoutRef.current = setTimeout(() => {
+      setCurrentWord('');
+      setWordToShow('');
+      setRevealedLetters([]);
+    }, 5000);  // change this to change the delay for how long the word stays reveealed
+  };
+
+  const cleanupTimers = () => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (revealIntervalRef.current) clearInterval(revealIntervalRef.current);
+    if (roundEndTimeoutRef.current) clearTimeout(roundEndTimeoutRef.current);
+  };
 
   const handleNameSubmit = (e) => {
     e.preventDefault();
@@ -146,6 +187,17 @@ function LobbyPage() {
     if (!userGuess.trim()) return;
     socket.emit('submit_guess', { lobbyCode, guess: userGuess.trim().toLowerCase() });
     setUserGuess('');
+  };
+
+  const renderWordOutline = () => {
+    if (!wordToShow) return null;
+    return (
+      <div style={{ fontSize: '24px', letterSpacing: '8px', marginTop: '20px' }}>
+        {wordToShow.split('').map((letter, idx) => (
+          revealedLetters[idx] ? letter : '_'
+        )).join(' ')}
+      </div>
+    );
   };
 
   return (
@@ -203,6 +255,7 @@ function LobbyPage() {
               <img src="https://cdn-icons-png.flaticon.com/512/727/727269.png" alt="Audio" width="100" />
               <br />
               <button onClick={() => playWordPronunciation(currentWord)}>Repeat</button>
+              {renderWordOutline()}
               <br /><br />
               <form onSubmit={(e) => { e.preventDefault(); handleSubmitGuess(); }}>
                 <input
@@ -219,7 +272,10 @@ function LobbyPage() {
               </form>
             </>
           ) : (
-            <h4>Preparing next round...</h4>
+            <>
+              <h4>Preparing next round...</h4>
+              {renderWordOutline()}
+            </>
           )}
 
           <br /><br />
@@ -234,13 +290,13 @@ function LobbyPage() {
       <hr style={{ margin: '40px 0' }} />
       <h3>Users in Lobby:</h3>
       <ul style={{ listStyleType: 'none', padding: 0 }}>
-      {users.map(user => (
-        <li key={user.id}>
-        {user.name} {user.id === socket.id ? '(You)' : ''} - {user.score || 0} pts
-        {user.correctThisRound && <span style={{ color: 'green', marginLeft: '8px' }}>✅</span>}
-        </li>
+        {users.map(user => (
+          <li key={user.id}>
+            {user.name} {user.id === socket.id ? '(You)' : ''} - {user.score || 0} pts
+            {user.correctThisRound && <span style={{ color: 'green', marginLeft: '8px' }}>✅</span>}
+          </li>
         ))}
-    </ul>
+      </ul>
     </div>
   );
 }

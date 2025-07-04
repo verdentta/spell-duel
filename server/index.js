@@ -15,7 +15,7 @@ const io = new Server(server, {
   }
 });
 
-const lobbies = {}; // { lobbyCode: { users, hostId, currentWord, round, timerId } }
+const lobbies = {};  // Structure: { lobbyCode: { users, hostId, currentWord, round, timerId } }
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
@@ -24,12 +24,22 @@ io.on('connection', (socket) => {
     socket.join(lobbyCode);
 
     if (!lobbies[lobbyCode]) {
-      lobbies[lobbyCode] = { users: [], hostId: socket.id, currentWord: '', round: 0, timerId: null };
+      lobbies[lobbyCode] = {
+        users: [],
+        hostId: socket.id,
+        currentWord: '',
+        round: 0,
+        timerId: null
+      };
       console.log(`${screenName} created lobby ${lobbyCode}`);
     }
 
-    lobbies[lobbyCode].users.push({ id: socket.id, name: screenName, score: 0, correctThisRound: false });
-    console.log(`${screenName} joined lobby ${lobbyCode}`);
+    lobbies[lobbyCode].users.push({
+      id: socket.id,
+      name: screenName,
+      score: 0,
+      correctThisRound: false
+    });
 
     io.to(lobbyCode).emit('lobby_users', {
       users: lobbies[lobbyCode].users,
@@ -38,45 +48,63 @@ io.on('connection', (socket) => {
   });
 
   socket.on('start_game', async ({ lobbyCode }) => {
-  const lobby = lobbies[lobbyCode];
-  if (lobby && lobby.hostId === socket.id) {
-    // Reset user scores and flags
-    lobby.users.forEach(u => {
-      u.score = 0;
-      u.correctThisRound = false;
-    });
+    const lobby = lobbies[lobbyCode];
+    if (lobby && lobby.hostId === socket.id) {
+      lobby.users.forEach(u => {
+        u.score = 0;
+        u.correctThisRound = false;
+      });
+      lobby.round = 0;
+      lobby.currentWord = '';
 
-    lobby.round = 0;
-    lobby.currentWord = '';
+      io.to(lobbyCode).emit('lobby_users', {
+        users: lobby.users,
+        hostId: lobby.hostId
+      });
 
-    // Send updated users immediately
-    io.to(lobbyCode).emit('lobby_users', {
-      users: lobby.users,
-      hostId: lobby.hostId
-    });
-
-    startNewRound(lobbyCode);
-  }
-});
+      startNewRound(lobbyCode);
+    }
+  });
 
   socket.on('submit_guess', ({ lobbyCode, guess }) => {
     const lobby = lobbies[lobbyCode];
     if (lobby && lobby.currentWord) {
       const correct = guess.toLowerCase() === lobby.currentWord;
+      const user = lobby.users.find(u => u.id === socket.id);
 
-      if (correct) {
-        const user = lobby.users.find(u => u.id === socket.id);
-        if (user && !user.correctThisRound) {
-          user.score += 10;
-          user.correctThisRound = true;
+      if (correct && user && !user.correctThisRound) {
+        user.score += 10;
+        user.correctThisRound = true;
 
-          io.to(lobbyCode).emit('lobby_users', {
-            users: lobby.users,
-            hostId: lobby.hostId
+        io.to(lobbyCode).emit('lobby_users', {
+          users: lobby.users,
+          hostId: lobby.hostId
+        });
+
+        io.to(socket.id).emit('correct_guess', { name: user.name });
+
+        // ✅ Check if all users spelled it correctly
+        const allCorrect = lobby.users.every(u => u.correctThisRound);
+
+        if (allCorrect) {
+          console.log(`All users spelled the word correctly, skipping timer.`);
+
+          if (lobby.timerId) {
+            clearTimeout(lobby.timerId);
+            lobby.timerId = null;
+          }
+
+          io.to(lobbyCode).emit('game_ended', {
+            correctGuesser: user.name,
+            word: lobby.currentWord
           });
 
-          io.to(socket.id).emit('correct_guess', { name: user.name });
-          console.log(`${user.name} spelled the word correctly and earned 10 points.`);
+          const savedWord = lobby.currentWord;
+          lobby.currentWord = '';
+
+          setTimeout(() => {
+            startNewRound(lobbyCode);
+          }, 5000); // Show word for 5 seconds before next round
         }
       }
     }
@@ -90,11 +118,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('A user disconnected:', socket.id);
-
     for (const lobbyCode in lobbies) {
       const lobby = lobbies[lobbyCode];
-      lobby.users = lobby.users.filter(user => user.id !== socket.id);
+      lobby.users = lobby.users.filter(u => u.id !== socket.id);
 
       if (lobby.hostId === socket.id && lobby.users.length > 0) {
         lobby.hostId = lobby.users[0].id;
@@ -116,13 +142,10 @@ async function startNewRound(lobbyCode) {
   const lobby = lobbies[lobbyCode];
   if (!lobby) return;
 
-  if (lobby.timerId) {
-    clearTimeout(lobby.timerId);
-  }
+  if (lobby.timerId) clearTimeout(lobby.timerId);
 
   if (lobby.round >= 10) {
     io.to(lobbyCode).emit('game_over');
-    console.log(`Game over in lobby ${lobbyCode}`);
     lobby.currentWord = '';
     return;
   }
@@ -135,25 +158,32 @@ async function startNewRound(lobbyCode) {
     lobby.currentWord = randomWord;
     lobby.round += 1;
 
-    // Reset correct flags for new round
     lobby.users.forEach(u => u.correctThisRound = false);
 
-    // Emit updated user list so frontends refresh
     io.to(lobbyCode).emit('lobby_users', {
       users: lobby.users,
       hostId: lobby.hostId
     });
 
-    io.to(lobbyCode).emit('game_started', { word: randomWord, round: lobby.round });
-
-    console.log(`Round ${lobby.round} started in lobby ${lobbyCode} with word: ${randomWord}`);
+    io.to(lobbyCode).emit('game_started', {
+      word: randomWord,
+      round: lobby.round
+    });
 
     lobby.timerId = setTimeout(() => {
-  const firstCorrect = lobby.users.find(u => u.correctThisRound) || null;
-  io.to(lobbyCode).emit('game_ended', { correctGuesser: firstCorrect ? firstCorrect.name : null });
-  lobby.currentWord = '';
-  startNewRound(lobbyCode);
-}, 5000);  
+      const firstCorrect = lobby.users.find(u => u.correctThisRound) || null;
+      io.to(lobbyCode).emit('game_ended', {
+        correctGuesser: firstCorrect ? firstCorrect.name : null,
+        word: lobby.currentWord
+      });
+
+      const savedWord = lobby.currentWord;
+      lobby.currentWord = '';
+
+      setTimeout(() => {
+        startNewRound(lobbyCode);
+      }, 5000); // Word revealed for 5 seconds
+    }, 20000);
 
   } catch (err) {
     console.error("Failed to fetch random word:", err);
@@ -164,18 +194,12 @@ function endGame(lobbyCode) {
   const lobby = lobbies[lobbyCode];
   if (!lobby) return;
 
-  if (lobby.timerId) {
-    clearTimeout(lobby.timerId);
-    lobby.timerId = null;
-  }
+  if (lobby.timerId) clearTimeout(lobby.timerId);
 
   io.to(lobbyCode).emit('game_over');
-  console.log(`Game ended manually in lobby ${lobbyCode}`);
-
   lobby.currentWord = '';
   lobby.round = 0;
 }
-
 
 const PORT = 5000;
 server.listen(PORT, () => {
