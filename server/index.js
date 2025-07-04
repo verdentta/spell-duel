@@ -38,12 +38,26 @@ io.on('connection', (socket) => {
   });
 
   socket.on('start_game', async ({ lobbyCode }) => {
-    const lobby = lobbies[lobbyCode];
-    if (lobby && lobby.hostId === socket.id) {
-      lobby.round = 0;
-      startNewRound(lobbyCode);
-    }
-  });
+  const lobby = lobbies[lobbyCode];
+  if (lobby && lobby.hostId === socket.id) {
+    // Reset user scores and flags
+    lobby.users.forEach(u => {
+      u.score = 0;
+      u.correctThisRound = false;
+    });
+
+    lobby.round = 0;
+    lobby.currentWord = '';
+
+    // Send updated users immediately
+    io.to(lobbyCode).emit('lobby_users', {
+      users: lobby.users,
+      hostId: lobby.hostId
+    });
+
+    startNewRound(lobbyCode);
+  }
+});
 
   socket.on('submit_guess', ({ lobbyCode, guess }) => {
     const lobby = lobbies[lobbyCode];
@@ -133,7 +147,7 @@ async function startNewRound(lobbyCode) {
   io.to(lobbyCode).emit('game_ended', { correctGuesser: firstCorrect ? firstCorrect.name : null });
   lobby.currentWord = '';
   startNewRound(lobbyCode);
-}, 20000);
+}, 5000);  
 
   } catch (err) {
     console.error("Failed to fetch random word:", err);

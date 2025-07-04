@@ -46,7 +46,7 @@ function LobbyPage() {
       setIsRoundActive(true);
       setCurrentWord(word);
       setUserGuess('');
-      setTimeLeft(20);
+      setTimeLeft(5);
       setRound(round);
       setCorrectGuesser(null);
 
@@ -73,7 +73,7 @@ function LobbyPage() {
       setIsRoundActive(false);
       setCurrentWord('');
       setUserGuess('');
-      setTimeLeft(20);
+      setTimeLeft(5);
       setCorrectGuesser(null);
 
       if (timerIntervalRef.current) {
@@ -87,7 +87,7 @@ function LobbyPage() {
       setIsRoundActive(false);
       setCurrentWord('');
       setUserGuess('');
-      setTimeLeft(20);
+      setTimeLeft(5);
       setCorrectGuesser(null);
       setGameOver(true);
 
