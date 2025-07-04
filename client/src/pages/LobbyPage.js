@@ -234,12 +234,13 @@ function LobbyPage() {
       <hr style={{ margin: '40px 0' }} />
       <h3>Users in Lobby:</h3>
       <ul style={{ listStyleType: 'none', padding: 0 }}>
-        {users.map(user => (
-          <li key={user.id}>
-            {user.name} {user.id === socket.id ? '(You)' : ''} - {user.score || 0} pts
-          </li>
+      {users.map(user => (
+        <li key={user.id}>
+        {user.name} {user.id === socket.id ? '(You)' : ''} - {user.score || 0} pts
+        {user.correctThisRound && <span style={{ color: 'green', marginLeft: '8px' }}>✅</span>}
+        </li>
         ))}
-      </ul>
+    </ul>
     </div>
   );
 }

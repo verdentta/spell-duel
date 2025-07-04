@@ -138,6 +138,12 @@ async function startNewRound(lobbyCode) {
     // Reset correct flags for new round
     lobby.users.forEach(u => u.correctThisRound = false);
 
+    // Emit updated user list so frontends refresh
+    io.to(lobbyCode).emit('lobby_users', {
+      users: lobby.users,
+      hostId: lobby.hostId
+    });
+
     io.to(lobbyCode).emit('game_started', { word: randomWord, round: lobby.round });
 
     console.log(`Round ${lobby.round} started in lobby ${lobbyCode} with word: ${randomWord}`);
