@@ -4,6 +4,13 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
+
+//wordlists that were generated so it's more efficient at pulling certain words at certain lengths
+const easyWords = require('./wordlists/easy.json');
+const mediumWords = require('./wordlists/medium.json');
+const hardWords = require('./wordlists/hard.json');
+const allWords = require('./wordlists/all.json');
+
 const app = express();
 app.use(cors());
 
@@ -152,6 +159,7 @@ io.on('connection', (socket) => {
 async function startNewRound(lobbyCode) {
   const lobby = lobbies[lobbyCode];
   if (!lobby) return;
+
   if (lobby.timerId) clearTimeout(lobby.timerId);
 
   if (lobby.round >= (lobby.customWords.length || lobby.maxRounds)) {
@@ -164,23 +172,21 @@ async function startNewRound(lobbyCode) {
   if (lobby.customWords.length) {
     word = lobby.customWords[lobby.round].toLowerCase();
   } else {
-    let validWord = '';
-    while (!validWord) {
-      const res = await fetch('https://random-word-api.herokuapp.com/word?number=1');
-      const data = await res.json();
-      const candidate = data[0].toLowerCase();
+    let wordList = allWords;
 
-      const length = candidate.length;
-      if (
-        lobby.difficulty === 'Easy' && length >= 3 && length <= 4 ||
-        lobby.difficulty === 'Medium' && length >= 5 && length <= 7 ||
-        lobby.difficulty === 'Hard' && length >= 8 ||
-        lobby.difficulty === 'All'
-      ) {
-        validWord = candidate;
-      }
+    switch (lobby.difficulty) {
+      case 'Easy':
+        wordList = easyWords;
+        break;
+      case 'Medium':
+        wordList = mediumWords;
+        break;
+      case 'Hard':
+        wordList = hardWords;
+        break;
     }
-    word = validWord;
+
+    word = wordList[Math.floor(Math.random() * wordList.length)].toLowerCase();
   }
 
   lobby.currentWord = word;
