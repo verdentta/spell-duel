@@ -9,16 +9,13 @@ app.use(cors());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-const lobbies = {};
+const lobbies = {}; 
 
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+  console.log('User connected:', socket.id);
 
   socket.on('join_lobby', ({ lobbyCode, screenName }) => {
     socket.join(lobbyCode);
@@ -29,8 +26,9 @@ io.on('connection', (socket) => {
         hostId: socket.id,
         currentWord: '',
         round: 0,
+        timerId: null,
         maxRounds: 10,
-        timerId: null
+        customWords: []
       };
       console.log(`${screenName} created lobby ${lobbyCode}`);
     }
@@ -42,28 +40,28 @@ io.on('connection', (socket) => {
       correctThisRound: false
     });
 
-    io.to(lobbyCode).emit('lobby_users', {
-      users: lobbies[lobbyCode].users,
-      hostId: lobbies[lobbyCode].hostId,
-      maxRounds: lobbies[lobbyCode].maxRounds
-    });
+    emitLobbyUpdate(lobbyCode);
   });
 
   socket.on('set_rounds', ({ lobbyCode, maxRounds }) => {
     const lobby = lobbies[lobbyCode];
-    if (lobby && lobby.hostId === socket.id) {
+    if (lobby && socket.id === lobby.hostId) {
       lobby.maxRounds = maxRounds;
-      io.to(lobbyCode).emit('lobby_users', {
-        users: lobby.users,
-        hostId: lobby.hostId,
-        maxRounds: lobby.maxRounds
-      });
+      emitLobbyUpdate(lobbyCode);
+    }
+  });
+
+  socket.on('set_custom_words', ({ lobbyCode, words }) => {
+    const lobby = lobbies[lobbyCode];
+    if (lobby && socket.id === lobby.hostId) {
+      lobby.customWords = Array.isArray(words) ? words : [];
+      emitLobbyUpdate(lobbyCode);
     }
   });
 
   socket.on('start_game', ({ lobbyCode }) => {
     const lobby = lobbies[lobbyCode];
-    if (lobby && lobby.hostId === socket.id) {
+    if (lobby && socket.id === lobby.hostId) {
       lobby.users.forEach(u => {
         u.score = 0;
         u.correctThisRound = false;
@@ -71,12 +69,7 @@ io.on('connection', (socket) => {
       lobby.round = 0;
       lobby.currentWord = '';
 
-      io.to(lobbyCode).emit('lobby_users', {
-        users: lobby.users,
-        hostId: lobby.hostId,
-        maxRounds: lobby.maxRounds
-      });
-
+      emitLobbyUpdate(lobbyCode);
       startNewRound(lobbyCode);
     }
   });
@@ -84,19 +77,12 @@ io.on('connection', (socket) => {
   socket.on('submit_guess', ({ lobbyCode, guess }) => {
     const lobby = lobbies[lobbyCode];
     if (lobby && lobby.currentWord) {
-      const correct = guess.toLowerCase() === lobby.currentWord;
       const user = lobby.users.find(u => u.id === socket.id);
-
-      if (correct && user && !user.correctThisRound) {
+      if (user && !user.correctThisRound && guess.toLowerCase() === lobby.currentWord) {
         user.score += 10;
         user.correctThisRound = true;
 
-        io.to(lobbyCode).emit('lobby_users', {
-          users: lobby.users,
-          hostId: lobby.hostId,
-          maxRounds: lobby.maxRounds
-        });
-
+        emitLobbyUpdate(lobbyCode);
         io.to(socket.id).emit('correct_guess', { name: user.name });
 
         if (lobby.users.every(u => u.correctThisRound)) {
@@ -109,7 +95,7 @@ io.on('connection', (socket) => {
 
   socket.on('end_game', ({ lobbyCode }) => {
     const lobby = lobbies[lobbyCode];
-    if (lobby && lobby.hostId === socket.id) {
+    if (lobby && socket.id === lobby.hostId) {
       endGame(lobbyCode);
     }
   });
@@ -126,15 +112,22 @@ io.on('connection', (socket) => {
       if (lobby.users.length === 0) {
         delete lobbies[lobbyCode];
       } else {
-        io.to(lobbyCode).emit('lobby_users', {
-          users: lobby.users,
-          hostId: lobby.hostId,
-          maxRounds: lobby.maxRounds
-        });
+        emitLobbyUpdate(lobbyCode);
       }
     }
   });
 });
+
+function emitLobbyUpdate(lobbyCode) {
+  const lobby = lobbies[lobbyCode];
+  if (lobby) {
+    io.to(lobbyCode).emit('lobby_users', {
+      users: lobby.users,
+      hostId: lobby.hostId,
+      maxRounds: lobby.customWords.length > 0 ? lobby.customWords.length : lobby.maxRounds
+    });
+  }
+}
 
 async function startNewRound(lobbyCode) {
   const lobby = lobbies[lobbyCode];
@@ -142,39 +135,41 @@ async function startNewRound(lobbyCode) {
 
   if (lobby.timerId) clearTimeout(lobby.timerId);
 
-  if (lobby.round >= lobby.maxRounds) {
+  const totalRounds = lobby.customWords.length > 0 ? lobby.customWords.length : lobby.maxRounds;
+  if (lobby.round >= totalRounds) {
     io.to(lobbyCode).emit('game_over');
     lobby.currentWord = '';
     return;
   }
 
-  try {
-    const res = await fetch('https://random-word-api.herokuapp.com/word?number=1');
-    const data = await res.json();
-    const randomWord = data[0].toLowerCase();
-
-    lobby.currentWord = randomWord;
-    lobby.round += 1;
-    lobby.users.forEach(u => u.correctThisRound = false);
-
-    io.to(lobbyCode).emit('lobby_users', {
-      users: lobby.users,
-      hostId: lobby.hostId,
-      maxRounds: lobby.maxRounds
-    });
-
-    io.to(lobbyCode).emit('game_started', {
-      word: randomWord,
-      round: lobby.round
-    });
-
-    lobby.timerId = setTimeout(() => {
-      endRound(lobbyCode);
-    }, 20000);
-
-  } catch (err) {
-    console.error("Failed to fetch random word:", err);
+  let randomWord;
+  if (lobby.customWords.length > 0) {
+    randomWord = lobby.customWords[lobby.round].toLowerCase();
+  } else {
+    try {
+      const res = await fetch('https://random-word-api.herokuapp.com/word?number=1');
+      const data = await res.json();
+      randomWord = data[0].toLowerCase();
+    } catch (err) {
+      console.error("Failed to fetch random word:", err);
+      return;
+    }
   }
+
+  lobby.currentWord = randomWord;
+  lobby.round += 1;
+  lobby.users.forEach(u => u.correctThisRound = false);
+
+  emitLobbyUpdate(lobbyCode);
+
+  io.to(lobbyCode).emit('game_started', {
+    word: randomWord,
+    round: lobby.round
+  });
+
+  lobby.timerId = setTimeout(() => {
+    endRound(lobbyCode);
+  }, 20000);
 }
 
 function endRound(lobbyCode) {
@@ -187,8 +182,7 @@ function endRound(lobbyCode) {
   });
 
   lobby.currentWord = '';
-
-  setTimeout(() => {
+  lobby.timerId = setTimeout(() => {
     startNewRound(lobbyCode);
   }, 5000);
 }
