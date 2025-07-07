@@ -15,11 +15,13 @@ function LobbyPage() {
   const [userGuess, setUserGuess] = useState('');
   const [timeLeft, setTimeLeft] = useState(20);
   const [round, setRound] = useState(0);
+  const [maxRounds, setMaxRounds] = useState(10);
   const [correctGuesser, setCorrectGuesser] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [isRoundActive, setIsRoundActive] = useState(false);
   const [revealedLetters, setRevealedLetters] = useState([]);
+  const [roundsInput, setRoundsInput] = useState(10);
 
   const inputRef = useRef(null);
   const timerIntervalRef = useRef(null);
@@ -40,9 +42,11 @@ function LobbyPage() {
   }, [screenName, lobbyCode, hasJoined]);
 
   useEffect(() => {
-    socket.on('lobby_users', ({ users, hostId }) => {
+    socket.on('lobby_users', ({ users, hostId, maxRounds }) => {
       setUsers(users);
       setHostId(hostId);
+      setMaxRounds(maxRounds || 10);
+      setRoundsInput(maxRounds || 10);
     });
 
     socket.on('game_started', ({ word, round }) => {
@@ -53,8 +57,8 @@ function LobbyPage() {
       setCorrectGuesser(name);
     });
 
-    socket.on('game_ended', ({ correctGuesser, word }) => {
-      endCurrentRound(correctGuesser, word);
+    socket.on('game_ended', ({ word }) => {
+      endCurrentRound(word);
     });
 
     socket.on('game_over', () => {
@@ -87,12 +91,12 @@ function LobbyPage() {
       if (revealIntervalRef.current) clearInterval(revealIntervalRef.current);
       revealIntervalRef.current = setInterval(() => {
         setRevealedLetters(prev => {
-          const unrevealedIndices = prev.map((val, idx) => !val ? idx : null).filter(idx => idx !== null);
-          if (unrevealedIndices.length === 0) {
+          const unrevealed = prev.map((val, idx) => !val ? idx : null).filter(idx => idx !== null);
+          if (unrevealed.length === 0) {
             clearInterval(revealIntervalRef.current);
             return prev;
           }
-          const randomIndex = unrevealedIndices[Math.floor(Math.random() * unrevealedIndices.length)];
+          const randomIndex = unrevealed[Math.floor(Math.random() * unrevealed.length)];
           const updated = [...prev];
           updated[randomIndex] = true;
           return updated;
@@ -114,7 +118,6 @@ function LobbyPage() {
     setCorrectGuesser(null);
 
     const delay = socket.id === hostId ? 1000 : 0;
-
     setTimeout(() => {
       playWordPronunciation(word);
       inputRef.current?.focus();
@@ -125,20 +128,20 @@ function LobbyPage() {
     }, 1000);
   };
 
-  const endCurrentRound = (correctGuesser, word) => {
+  const endCurrentRound = (word) => {
     setIsRoundActive(false);
-    setCorrectGuesser(correctGuesser || null);
-    setWordToShow(word);
-    setRevealedLetters(new Array(word.length).fill(true));
-
+    setCorrectGuesser(null);
     clearInterval(revealIntervalRef.current);
     clearInterval(timerIntervalRef.current);
+
+    setWordToShow(word);
+    setRevealedLetters(new Array(word.length).fill(true));
 
     roundEndTimeoutRef.current = setTimeout(() => {
       setCurrentWord('');
       setWordToShow('');
       setRevealedLetters([]);
-    }, 5000);  // change this to change the delay for how long the word stays reveealed
+    }, 5000);
   };
 
   const cleanupTimers = () => {
@@ -149,10 +152,7 @@ function LobbyPage() {
 
   const handleNameSubmit = (e) => {
     e.preventDefault();
-    if (!screenName.trim()) {
-      alert('Please enter a screen name');
-      return;
-    }
+    if (!screenName.trim()) return;
     setHasJoined(true);
   };
 
@@ -229,23 +229,39 @@ function LobbyPage() {
             style={{ width: '300px', padding: '10px' }}
           />
           <br /><br />
-          <button
-            onClick={() => navigator.clipboard.writeText(`${window.location.origin}/lobby/${lobbyCode}`)}
-            style={{ padding: '10px 20px' }}
-          >
-            Copy Invite Link
-          </button>
-          <br /><br />
           {isHost && (
-            <button onClick={handleStartGame} style={{ padding: '10px 20px' }}>
-              {gameOver ? 'Play Again' : 'Start Game'}
-            </button>
+            <>
+              <div style={{ marginTop: '20px' }}>
+                <label>
+                  Number of Rounds:&nbsp;
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={roundsInput}
+                    onChange={(e) => {
+                    const num = parseInt(e.target.value);
+                    setRoundsInput(e.target.value);  // Keep UI in sync
+                    if (num >= 1 && num <= 20) {
+                      socket.emit('set_rounds', { lobbyCode, maxRounds: num });
+                    }
+                  }}
+                  style={{ width: '60px', padding: '5px' }}
+                  />
+                </label>
+              </div>
+              <br />
+              <button onClick={handleStartGame} style={{ padding: '10px 20px' }}>
+                {gameOver ? 'Play Again' : 'Start Game'}
+              </button>
+            </>
           )}
+          <h3>Rounds: {maxRounds}</h3>
           {gameOver && <h3>Game Over! Thanks for playing.</h3>}
         </>
       ) : (
         <>
-          <h3>Round {round} of 10</h3>
+          <h3>Round {round} of {maxRounds}</h3>
           {isRoundActive ? (
             <>
               <h3>Time Remaining: {timeLeft} seconds</h3>
@@ -277,7 +293,6 @@ function LobbyPage() {
               {renderWordOutline()}
             </>
           )}
-
           <br /><br />
           {isHost && (
             <button onClick={() => socket.emit('end_game', { lobbyCode })}>
