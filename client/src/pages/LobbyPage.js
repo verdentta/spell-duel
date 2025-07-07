@@ -28,6 +28,8 @@ function LobbyPage() {
   const revealIntervalRef = useRef(null);
   const roundEndTimeoutRef = useRef(null);
 
+  const [difficulty, setDifficulty] = useState('All');
+
   useEffect(() => {
     if (location.state?.screenName) {
       setScreenName(location.state.screenName);
@@ -220,13 +222,19 @@ function LobbyPage() {
           <>
             <div style={{ marginTop: '20px' }}>
               <label>
-                Custom Words (comma separated):<br />
+                Custom Words (comma separated) up to 100 words ONLY:<br />
                 <textarea
                   value={customWordsInput}
                   onChange={(e) => {
-                    setCustomWordsInput(e.target.value);
-                    const words = e.target.value.split(',').map(w => w.trim()).filter(Boolean);
-                    socket.emit('set_custom_words', { lobbyCode, words });
+                    const input = e.target.value;
+                    const words = input.split(',').map(w => w.trim()).filter(Boolean);
+
+                    if (words.length <= 100) {
+                      setCustomWordsInput(input);
+                      socket.emit('set_custom_words', { lobbyCode, words });
+                    } else {
+                      alert("Limit is 100 custom words.");
+                    }
                   }}
                   rows="4"
                   cols="30"
@@ -235,18 +243,38 @@ function LobbyPage() {
               </label>
             </div>
 
+            <div style={{ marginTop: '20px', opacity: customWordsInput.trim() ? 0.5 : 1 }}>
+            <label>
+              Difficulty:&nbsp;
+              <select
+                value={difficulty}
+                disabled={!!customWordsInput.trim()}
+                onChange={(e) => {
+                  setDifficulty(e.target.value);
+                  socket.emit('set_difficulty', { lobbyCode, difficulty: e.target.value });
+                }}
+                style={{ padding: '5px' }}
+              >
+                <option value="All">All Words</option>
+                <option value="Easy">Easy (3-4 letters)</option>
+                <option value="Medium">Medium (5-7 letters)</option>
+                <option value="Hard">Hard (8+ letters)</option>
+              </select>
+            </label>
+          </div>
+
             <div style={{ marginTop: '20px' }}>
               <label>
                 Number of Rounds:&nbsp;
                 <input
                   type="number"
                   min="1"
-                  max="20"
+                  max="100"
                   value={roundsInput}
                   onChange={(e) => {
                     const num = parseInt(e.target.value);
                     setRoundsInput(e.target.value);
-                    if (num >= 1 && num <= 20) {
+                    if (num >= 1 && num <= 100) {
                       socket.emit('set_rounds', { lobbyCode, maxRounds: num });
                     }
                   }}
