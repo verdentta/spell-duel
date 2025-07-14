@@ -209,14 +209,28 @@ async function startNewRound(lobbyCode) {
   }, 20000);
 }
 
-function endRound(lobbyCode) {
+async function endRound(lobbyCode) {
   const lobby = lobbies[lobbyCode];
   if (!lobby) return;
+
   const firstCorrect = lobby.users.find(u => u.correctThisRound) || null;
+  const word = lobby.currentWord;
+
+  let definition = '';
+  try {
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+    const data = await res.json();
+    if (Array.isArray(data) && data[0]?.meanings?.[0]?.definitions?.[0]?.definition) {
+      definition = data[0].meanings[0].definitions[0].definition;
+    }
+  } catch (err) {
+    console.error(`Failed to fetch definition for ${word}:`, err);
+  }
 
   io.to(lobbyCode).emit('game_ended', {
     correctGuesser: firstCorrect ? firstCorrect.name : null,
-    word: lobby.currentWord
+    word,
+    definition
   });
 
   setTimeout(() => {

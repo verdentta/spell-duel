@@ -30,6 +30,9 @@ function LobbyPage() {
 
   const [difficulty, setDifficulty] = useState('All');
 
+  const [revealedWord, setRevealedWord] = useState('');
+  const [wordDefinition, setWordDefinition] = useState('');
+
   useEffect(() => {
     if (location.state?.screenName) {
       setScreenName(location.state.screenName);
@@ -58,9 +61,14 @@ function LobbyPage() {
       setCorrectGuesser(name);
     });
 
-    socket.on('game_ended', ({ word, correctGuesser }) => {
-      endCurrentRound(word, correctGuesser);
+    socket.on('game_ended', ({ correctGuesser, word, definition }) => {
+      setCorrectGuesser(correctGuesser);
+      setRevealedWord(word);
+      setWordDefinition(definition || 'Definition not found.');
+      setIsRoundActive(false);
+      setRevealedLetters(new Array(word.length).fill(true));
     });
+
 
     socket.on('game_over', () => {
       cleanupTimers();
@@ -330,7 +338,8 @@ function LobbyPage() {
           </>
         ) : (
           <>
-            <h4>Preparing next round...</h4>
+            <h4>Word: {revealedWord}</h4>
+            <p><strong>Definition:</strong> {wordDefinition}</p>
             {renderWordOutline()}
           </>
         )}
