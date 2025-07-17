@@ -15,6 +15,7 @@ function LobbyPage() {
   const [timeLeft, setTimeLeft] = useState(20);
   const [round, setRound] = useState(0);
   const [maxRounds, setMaxRounds] = useState(10);
+  const [roundTime, setRoundTime] = useState(20);
   const [correctGuesser, setCorrectGuesser] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [isGameStarted, setIsGameStarted] = useState(false);
@@ -32,6 +33,7 @@ function LobbyPage() {
 
   const [revealedWord, setRevealedWord] = useState('');
   const [wordDefinition, setWordDefinition] = useState('');
+
 
   useEffect(() => {
     if (location.state?.screenName) {
@@ -53,8 +55,8 @@ function LobbyPage() {
       setMaxRounds(maxRounds || 10);
     });
 
-    socket.on('game_started', ({ word, round }) => {
-      startNewRound(word, round);
+    socket.on('game_started', ({ word, round, roundTime }) => {
+      startNewRound(word, round, roundTime);
     });
 
     socket.on('correct_guess', ({ name }) => {
@@ -92,13 +94,13 @@ function LobbyPage() {
     };
   }, [hostId]);
 
-  const startNewRound = (word, roundNumber) => {
+  const startNewRound = (word, roundNumber, serverRoundTime = 20) => {
     cleanupTimers();
     setIsGameStarted(true);
     setIsRoundActive(true);
     setCurrentWord(word);
     setUserGuess('');
-    setTimeLeft(20);
+    setTimeLeft(serverRoundTime); //  use dynamic time
     setRound(roundNumber);
     setCorrectGuesser(null);
     setRevealedLetters(new Array(word.length).fill(false));
@@ -235,13 +237,17 @@ function LobbyPage() {
                   value={customWordsInput}
                   onChange={(e) => {
                     const input = e.target.value;
-                    const words = input.split(',').map(w => w.trim()).filter(Boolean);
-
-                    if (words.length <= 100) {
                       setCustomWordsInput(input);
+
+                      const words = input.split(',').map(w => w.trim()).filter(Boolean);
+
+                      // Always emit — even if input is empty — to ensure reset
                       socket.emit('set_custom_words', { lobbyCode, words });
-                    } else {
-                      alert("Limit is 100 custom words.");
+
+                      if (input.trim().length === 0) {
+                      socket.emit('set_rounds', { lobbyCode, maxRounds: parseInt(roundsInput || '10') });
+                      setRoundsInput('10');
+                      setMaxRounds(10);
                     }
                   }}
                   rows="4"
@@ -291,6 +297,26 @@ function LobbyPage() {
                 />
               </label>
             </div>
+
+            <div style={{ marginTop: '20px' }}>
+            <label>
+              Time per round (seconds):&nbsp;
+              <input
+                type="number"
+                min="5"
+                max="300"
+                value={roundTime}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setRoundTime(val);
+                  if (val >= 5 && val <= 300) {
+                    socket.emit('set_round_time', { lobbyCode, seconds: val });
+                  }
+                }}
+                style={{ width: '60px', padding: '5px' }}
+              />
+            </label>
+          </div>
 
             {customWordsInput.trim().length > 0 && (
               <p style={{ color: 'gray', marginTop: '5px' }}>

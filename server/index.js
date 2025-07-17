@@ -6,10 +6,10 @@ const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fet
 
 
 //wordlists that were generated so it's more efficient at pulling certain words at certain lengths
-const easyWords = require('./wordlists/easy.json');
-const mediumWords = require('./wordlists/medium.json');
-const hardWords = require('./wordlists/hard.json');
-const allWords = require('./wordlists/all.json');
+const easyWords = require('./wordlists/easy_definitions.json');
+const mediumWords = require('./wordlists/medium_definitions.json');
+const hardWords = require('./wordlists/hard_definitions.json');
+const allWords = require('./wordlists/all_definitions.json');
 
 const app = express();
 app.use(cors());
@@ -36,7 +36,8 @@ io.on('connection', (socket) => {
         maxRounds: 10,
         customWords: [],
         difficulty: 'All',
-        timerId: null
+        timerId: null,
+        roundTime: 20 
       };
     }
 
@@ -68,13 +69,28 @@ io.on('connection', (socket) => {
   }
 });
 
+socket.on('set_round_time', ({ lobbyCode, seconds }) => {
+  const lobby = lobbies[lobbyCode];
+  if (!lobby || lobby.hostId !== socket.id) return;
+
+  const capped = Math.min(300, Math.max(5, seconds)); // allow 5–300s
+  lobby.roundTime = capped;
+
+  // Optional: broadcast updated time to others
+  io.to(lobbyCode).emit('round_time_updated', { roundTime: capped });
+});
+
   socket.on('set_custom_words', ({ lobbyCode, words }) => {
   const lobby = lobbies[lobbyCode];
   if (!lobby) return;
 
-  const limitedWords = words.slice(0, 100); // limit to 100 words
+  const limitedWords = words.slice(0, 100).map(w => w.toLowerCase()); // normalize to lowercase
   lobby.customWords = limitedWords;
-  lobby.maxRounds = limitedWords.length;
+
+  // Only override maxRounds if there are custom words
+  if (limitedWords.length > 0) {
+    lobby.maxRounds = limitedWords.length;
+  }
 
   io.to(lobbyCode).emit('lobby_users', {
     users: lobby.users,
@@ -162,32 +178,30 @@ async function startNewRound(lobbyCode) {
 
   if (lobby.timerId) clearTimeout(lobby.timerId);
 
-  if (lobby.round >= (lobby.customWords.length || lobby.maxRounds)) {
-    io.to(lobbyCode).emit('game_over');
-    lobby.currentWord = '';
-    return;
-  }
+const isCustomMode = lobby.customWords.length > 0;
+const roundsLimit = isCustomMode ? lobby.customWords.length : lobby.maxRounds;
+
+if (lobby.round >= roundsLimit) {
+  io.to(lobbyCode).emit('game_over');
+  lobby.currentWord = '';
+  return;
+}
 
   let word = '';
-  if (lobby.customWords.length) {
-    word = lobby.customWords[lobby.round].toLowerCase();
-  } else {
-    let wordList = allWords;
-
-    switch (lobby.difficulty) {
-      case 'Easy':
-        wordList = easyWords;
-        break;
-      case 'Medium':
-        wordList = mediumWords;
-        break;
-      case 'Hard':
-        wordList = hardWords;
-        break;
-    }
-
-    word = wordList[Math.floor(Math.random() * wordList.length)].toLowerCase();
+  if (lobby.customWords.length > 0 && lobby.round < lobby.customWords.length) {
+  word = lobby.customWords[lobby.round];
+} else {
+  lobby.customWords = []; // Reset just in case
+  let wordList = allWords;
+  switch (lobby.difficulty) {
+    case 'Easy': wordList = easyWords; break;
+    case 'Medium': wordList = mediumWords; break;
+    case 'Hard': wordList = hardWords; break;
   }
+
+  const wordKeys = Object.keys(wordList);
+  word = wordKeys[Math.floor(Math.random() * wordKeys.length)];
+}
 
   lobby.currentWord = word;
   lobby.round += 1;
@@ -200,13 +214,14 @@ async function startNewRound(lobbyCode) {
   });
 
   io.to(lobbyCode).emit('game_started', {
-    word,
-    round: lobby.round
-  });
+  word,
+  round: lobby.round,
+  roundTime: lobby.roundTime // send it to the client
+});
 
   lobby.timerId = setTimeout(() => {
     endRound(lobbyCode);
-  }, 20000);
+  }, lobby.roundTime * 1000);
 }
 
 async function endRound(lobbyCode) {
@@ -216,16 +231,14 @@ async function endRound(lobbyCode) {
   const firstCorrect = lobby.users.find(u => u.correctThisRound) || null;
   const word = lobby.currentWord;
 
-  let definition = '';
-  try {
-    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-    const data = await res.json();
-    if (Array.isArray(data) && data[0]?.meanings?.[0]?.definitions?.[0]?.definition) {
-      definition = data[0].meanings[0].definitions[0].definition;
-    }
-  } catch (err) {
-    console.error(`Failed to fetch definition for ${word}:`, err);
-  }
+  const wordList =
+  lobby.difficulty === 'Easy' ? easyWords :
+  lobby.difficulty === 'Medium' ? mediumWords :
+  lobby.difficulty === 'Hard' ? hardWords :
+  allWords;
+
+const rawDefinition = wordList[word] || "Definition not available.";
+const definition = rawDefinition.replace(/^"|"$/g, '');
 
   io.to(lobbyCode).emit('game_ended', {
     correctGuesser: firstCorrect ? firstCorrect.name : null,
