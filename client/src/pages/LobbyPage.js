@@ -63,13 +63,14 @@ function LobbyPage() {
       setCorrectGuesser(name);
     });
 
-    socket.on('game_ended', ({ correctGuesser, word, definition }) => {
+    socket.on('game_ended', ({ correctGuesser, word, definition, isCustom }) => {
       setCorrectGuesser(correctGuesser);
       setRevealedWord(word);
-      setWordDefinition(definition || 'Definition not found.');
+      setWordDefinition(isCustom ? '' : (definition || 'Definition not found.'));
       setIsRoundActive(false);
       setRevealedLetters(new Array(word.length).fill(true));
     });
+
 
 
     socket.on('game_over', () => {
@@ -116,19 +117,30 @@ function LobbyPage() {
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
+    const totalToReveal = Math.max(1, Math.floor(word.length * 0.75));
+    const revealSpacing = Math.floor((serverRoundTime * 1000) / totalToReveal); // in ms
+    const unrevealedIndices = word.split('').map((_, i) => i); // [0,1,2,...]
+
+    let revealsSoFar = 0;
+
     revealIntervalRef.current = setInterval(() => {
       setRevealedLetters(prev => {
-        const unrevealed = prev.map((val, idx) => !val ? idx : null).filter(i => i !== null);
-        if (unrevealed.length === 0) {
+        if (revealsSoFar >= totalToReveal || unrevealedIndices.length === 0) {
           clearInterval(revealIntervalRef.current);
           return prev;
         }
-        const randomIndex = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+
         const updated = [...prev];
-        updated[randomIndex] = true;
+        const idx = unrevealedIndices.splice(
+          Math.floor(Math.random() * unrevealedIndices.length),
+          1
+        )[0];
+        updated[idx] = true;
+
+        revealsSoFar++;
         return updated;
       });
-    }, 4000);
+    }, revealSpacing);
   };
 
   const endCurrentRound = (word, correctName) => {
@@ -255,6 +267,11 @@ function LobbyPage() {
                   placeholder="e.g. apple, banana, orange"
                 />
               </label>
+              {customWordsInput.trim().length > 0 && (
+                  <p style={{ color: 'gray', marginTop: '5px' }}>
+                    Custom words will not display definitions.
+                  </p>
+                )}
             </div>
 
             <div style={{ marginTop: '20px', opacity: customWordsInput.trim() ? 0.5 : 1 }}>
@@ -365,7 +382,9 @@ function LobbyPage() {
         ) : (
           <>
             <h4>Word: {revealedWord}</h4>
-            <p><strong>Definition:</strong> {wordDefinition}</p>
+            {wordDefinition && (
+              <p><strong>Definition:</strong> {wordDefinition}</p>
+            )}
             {renderWordOutline()}
           </>
         )}

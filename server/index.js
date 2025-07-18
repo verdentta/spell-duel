@@ -243,7 +243,8 @@ const definition = rawDefinition.replace(/^"|"$/g, '');
   io.to(lobbyCode).emit('game_ended', {
     correctGuesser: firstCorrect ? firstCorrect.name : null,
     word,
-    definition
+    definition,
+    isCustom: lobby.customWords.includes(word) // set this flag so it doesn't show the definition
   });
 
   setTimeout(() => {
