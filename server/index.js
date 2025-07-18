@@ -37,7 +37,8 @@ io.on('connection', (socket) => {
         customWords: [],
         difficulty: 'All',
         timerId: null,
-        roundTime: 20 
+        roundTime: 20,
+        testedWords: [] 
       };
     }
 
@@ -115,6 +116,7 @@ socket.on('set_round_time', ({ lobbyCode, seconds }) => {
       });
       lobby.round = 0;
       lobby.currentWord = '';
+      lobby.testedWords = [];
       startNewRound(lobbyCode);
     }
   });
@@ -182,7 +184,10 @@ const isCustomMode = lobby.customWords.length > 0;
 const roundsLimit = isCustomMode ? lobby.customWords.length : lobby.maxRounds;
 
 if (lobby.round >= roundsLimit) {
-  io.to(lobbyCode).emit('game_over');
+  io.to(lobbyCode).emit('game_over', {
+    testedWords: lobby.testedWords || [],
+    isCustomMode: lobby.customWords.length > 0
+  });
   lobby.currentWord = '';
   return;
 }
@@ -202,6 +207,8 @@ if (lobby.round >= roundsLimit) {
   const wordKeys = Object.keys(wordList);
   word = wordKeys[Math.floor(Math.random() * wordKeys.length)];
 }
+
+  lobby.testedWords.push({ word });
 
   lobby.currentWord = word;
   lobby.round += 1;
@@ -237,8 +244,12 @@ async function endRound(lobbyCode) {
   lobby.difficulty === 'Hard' ? hardWords :
   allWords;
 
-const rawDefinition = wordList[word] || "Definition not available.";
-const definition = rawDefinition.replace(/^"|"$/g, '');
+  const rawDefinition = wordList[word] || "Definition not available.";
+  const definition = rawDefinition.replace(/^"|"$/g, '');
+
+  if (lobby.testedWords.length > 0) {
+    lobby.testedWords[lobby.testedWords.length - 1].definition = definition;
+  }
 
   io.to(lobbyCode).emit('game_ended', {
     correctGuesser: firstCorrect ? firstCorrect.name : null,
@@ -257,9 +268,18 @@ const definition = rawDefinition.replace(/^"|"$/g, '');
 function endGame(lobbyCode) {
   const lobby = lobbies[lobbyCode];
   if (!lobby) return;
+
+  if (!lobby.testedWords) {
+    lobby.testedWords = [];  
+  }
+
   if (lobby.timerId) clearTimeout(lobby.timerId);
 
-  io.to(lobbyCode).emit('game_over');
+  io.to(lobbyCode).emit('game_over', {
+    testedWords: lobby.testedWords,
+    isCustomMode: lobby.customWords.length > 0
+  });
+
   lobby.currentWord = '';
   lobby.round = 0;
 }
