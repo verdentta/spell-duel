@@ -38,7 +38,8 @@ io.on('connection', (socket) => {
         difficulty: 'All',
         timerId: null,
         roundTime: 20,
-        testedWords: [] 
+        testedWords: [],
+        wordReveal: true 
       };
     }
 
@@ -67,6 +68,13 @@ io.on('connection', (socket) => {
       hostId: lobby.hostId,
       maxRounds: lobby.maxRounds
     });
+  }
+});
+
+socket.on('set_word_reveal', ({ lobbyCode, wordReveal }) => {
+  const lobby = lobbies[lobbyCode];
+  if (lobby && lobby.hostId === socket.id) {
+    lobby.wordReveal = wordReveal;
   }
 });
 
@@ -221,10 +229,11 @@ if (lobby.round >= roundsLimit) {
   });
 
   io.to(lobbyCode).emit('game_started', {
-  word,
-  round: lobby.round,
-  roundTime: lobby.roundTime // send it to the client
-});
+    word,
+    round: lobby.round,
+    roundTime: lobby.roundTime,
+    wordReveal: lobby.wordReveal
+  });
 
   lobby.timerId = setTimeout(() => {
     endRound(lobbyCode);

@@ -37,6 +37,7 @@ function LobbyPage() {
   const [wordHistory, setWordHistory] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
 
+  const [wordReveal, setWordReveal] = useState(true);
 
   useEffect(() => {
     if (location.state?.screenName) {
@@ -58,8 +59,8 @@ function LobbyPage() {
       setMaxRounds(maxRounds || 10);
     });
 
-    socket.on('game_started', ({ word, round, roundTime }) => {
-      startNewRound(word, round, roundTime);
+    socket.on('game_started', ({ word, round, roundTime, wordReveal }) => {
+      startNewRound(word, round, roundTime, wordReveal);
     });
 
     socket.on('correct_guess', ({ name }) => {
@@ -100,7 +101,7 @@ function LobbyPage() {
     };
   }, [hostId]);
 
-  const startNewRound = (word, roundNumber, serverRoundTime = 20) => {
+    const startNewRound = (word, roundNumber, serverRoundTime = 20, serverWordReveal = true) => {
     cleanupTimers();
     setIsGameStarted(true);
     setIsRoundActive(true);
@@ -130,24 +131,26 @@ function LobbyPage() {
 
     let revealsSoFar = 0;
 
-    revealIntervalRef.current = setInterval(() => {
-      setRevealedLetters(prev => {
-        if (revealsSoFar >= totalToReveal || unrevealedIndices.length === 0) {
-          clearInterval(revealIntervalRef.current);
-          return prev;
+    if (serverWordReveal) {
+          revealIntervalRef.current = setInterval(() => {
+            setRevealedLetters(prev => {
+              if (revealsSoFar >= totalToReveal || unrevealedIndices.length === 0) {
+                clearInterval(revealIntervalRef.current);
+                return prev;
+              }
+
+              const updated = [...prev];
+              const idx = unrevealedIndices.splice(
+                Math.floor(Math.random() * unrevealedIndices.length),
+                1
+              )[0];
+              updated[idx] = true;
+
+              revealsSoFar++;
+              return updated;
+            });
+          }, revealSpacing);
         }
-
-        const updated = [...prev];
-        const idx = unrevealedIndices.splice(
-          Math.floor(Math.random() * unrevealedIndices.length),
-          1
-        )[0];
-        updated[idx] = true;
-
-        revealsSoFar++;
-        return updated;
-      });
-    }, revealSpacing);
   };
 
   const endCurrentRound = (word, correctName) => {
@@ -361,6 +364,24 @@ function LobbyPage() {
                     />
                   </label>
                 </div>
+
+                <div style={{ marginTop: '20px' }}>
+                <label>
+                  Word Reveal:&nbsp;
+                  <select
+                    value={wordReveal ? 'On' : 'Off'}
+                    onChange={(e) => {
+                      const revealOn = e.target.value === 'On';
+                      setWordReveal(revealOn);
+                      socket.emit('set_word_reveal', { lobbyCode, wordReveal: revealOn });
+                    }}
+                    style={{ padding: '5px' }}
+                  >
+                    <option value="On">On</option>
+                    <option value="Off">Off</option>
+                  </select>
+                </label>
+              </div>
 
                 {customWordsInput.trim().length > 0 && (
                   <p style={{ color: 'gray', marginTop: '5px' }}>
