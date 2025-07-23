@@ -5,8 +5,11 @@ import socket from '../socket';
 function LobbyPage() {
   const { lobbyCode } = useParams();
   const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const [screenName, setScreenName] = useState(searchParams.get('name') || '');
+  const [avatarSeed, setAvatarSeed] = useState(searchParams.get('avatar') || 'default');
 
-  const [screenName, setScreenName] = useState('');
+
   const [users, setUsers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
   const [hostId, setHostId] = useState('');
@@ -38,17 +41,16 @@ function LobbyPage() {
   const [showSummary, setShowSummary] = useState(false);
 
   const [wordReveal, setWordReveal] = useState(true);
-
+  
   useEffect(() => {
-    if (location.state?.screenName) {
-      setScreenName(location.state.screenName);
+    if (searchParams.get('name')) {
       setHasJoined(true);
     }
-  }, [location]);
+  }, []);
 
   useEffect(() => {
     if (screenName && hasJoined) {
-      socket.emit('join_lobby', { lobbyCode, screenName });
+      socket.emit('join_lobby', { lobbyCode, screenName, avatarSeed });
     }
   }, [screenName, lobbyCode, hasJoined]);
 
@@ -234,6 +236,20 @@ function LobbyPage() {
               style={{ padding: '10px', fontSize: '16px' }}
             />
             <br /><br />
+            <input
+              type="text"
+              placeholder="Customize your avatar (e.g. cool-cat)"
+              value={avatarSeed}
+              onChange={(e) => setAvatarSeed(e.target.value)}
+              style={{ padding: '10px', fontSize: '16px' }}
+            />
+            <br /><br />
+            <img
+              src={`http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${avatarSeed}`}
+              alt="avatar preview"
+              style={{ width: '80px', height: '80px', marginBottom: '10px' }}
+            />
+            <br />
             <button type="submit" style={{ padding: '10px 20px' }}>Join Lobby</button>
           </form>
         </div>
@@ -451,10 +467,25 @@ function LobbyPage() {
       <h3>Users in Lobby:</h3>
       <ul style={{ listStyleType: 'none', padding: 0 }}>
         {users.map(user => (
-          <li key={user.id}>
-            {user.name} {user.id === socket.id ? '(You)' : ''} - {user.score || 0} pts
-            {user.correctThisRound && <span style={{ color: 'green', marginLeft: '8px' }}>✅</span>}
-          </li>
+          <div
+            key={user.id}
+            style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}
+          >
+            <img
+              src={`http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${user.avatarSeed}`}
+              alt="avatar"
+              style={{ width: '40px', height: '40px', marginRight: '10px' }}
+            />
+            <span>
+              {user.name}
+              {user.id === socket.id && ' (You)'}
+              {' - '}
+              {user.score || 0} pts
+              {user.correctThisRound && (
+                <span style={{ color: 'green', marginLeft: '8px' }}>✅</span>
+              )}
+            </span>
+          </div>
         ))}
       </ul>
     </div>

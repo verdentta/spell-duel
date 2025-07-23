@@ -24,7 +24,7 @@ const lobbies = {};
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('join_lobby', ({ lobbyCode, screenName }) => {
+  socket.on('join_lobby', ({ lobbyCode, screenName, avatarSeed }) => {
     socket.join(lobbyCode);
 
     if (!lobbies[lobbyCode]) {
@@ -46,6 +46,7 @@ io.on('connection', (socket) => {
     lobbies[lobbyCode].users.push({
       id: socket.id,
       name: screenName,
+      avatarSeed,
       score: 0,
       correctThisRound: false
     });

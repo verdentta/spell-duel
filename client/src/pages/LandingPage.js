@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 function LandingPage() {
   const [screenName, setScreenName] = useState('');
+  const [avatarSeed, setAvatarSeed] = useState('default');
   const navigate = useNavigate();
 
   const handleSubmit = (e) => {
@@ -13,12 +14,11 @@ function LandingPage() {
       return;
     }
 
-    // Generate random lobby code (for now, done client-side)
     const lobbyCode = Math.random().toString(36).substring(2, 8);
-
-    // Navigate to the lobby page with the code
-    navigate(`/lobby/${lobbyCode}`, { state: { screenName } });
+    navigate(`/lobby/${lobbyCode}?name=${encodeURIComponent(screenName)}&avatar=${encodeURIComponent(avatarSeed)}`);
   };
+
+  const avatarUrl = `http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${encodeURIComponent(avatarSeed)}`;
 
   return (
     <div style={{ textAlign: 'center', marginTop: '100px' }}>
@@ -32,6 +32,24 @@ function LandingPage() {
           style={{ padding: '10px', fontSize: '16px' }}
         />
         <br /><br />
+
+        <label>Customize Your Avatar Seed</label><br />
+        <input
+          type="text"
+          placeholder="Avatar seed (e.g. name123)"
+          value={avatarSeed}
+          onChange={(e) => setAvatarSeed(e.target.value)}
+          style={{ padding: '10px', fontSize: '16px' }}
+        />
+        <br /><br />
+
+        <img
+          src={avatarUrl}
+          alt="Your Avatar"
+          style={{ width: '100px', height: '100px' }}
+        />
+        <br /><br />
+
         <button type="submit" style={{ padding: '10px 20px', fontSize: '16px' }}>
           Create Lobby
         </button>

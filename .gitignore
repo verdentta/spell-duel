@@ -6,6 +6,7 @@ npm-debug.log
 # Build
 client/build
 server/build
+dicebear-api/build
 
 # VSCode
 .vscode
