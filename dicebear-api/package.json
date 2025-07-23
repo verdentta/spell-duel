@@ -1,0 +1,50 @@
+{
+  "name": "@dicebear/api",
+  "private": true,
+  "license": "MIT",
+  "author": "Florian Körner <contact@florian-koerner.com>",
+  "type": "module",
+  "scripts": {
+    "predev": "tsx ./scripts/build-fonts.ts",
+    "dev": "tsx --watch ./src/server.ts",
+    "prebuild": "tsx ./scripts/build-fonts.ts",
+    "build": "tsc --build",
+    "start": "node ./dist/server.js",
+    "test": "node --test tests/*.js"
+  },
+  "workspaces": [
+    "./versions/*"
+  ],
+  "dependencies": {
+    "@dicebear/api-5": "*",
+    "@dicebear/api-6": "*",
+    "@dicebear/api-7": "*",
+    "@dicebear/api-8": "*",
+    "@dicebear/api-9": "*",
+    "@dicebear/converter": "^9.2.3",
+    "@fastify/cors": "^11.0.1",
+    "change-case": "^5.4.4",
+    "dotenv": "^17.2.0",
+    "fastify": "^5.4.0",
+    "qs": "^6.14.0"
+  },
+  "devDependencies": {
+    "@fontsource/noto-sans": "^5.2.7",
+    "@fontsource/noto-sans-jp": "^5.2.5",
+    "@fontsource/noto-sans-kr": "^5.2.5",
+    "@fontsource/noto-sans-sc": "^5.2.6",
+    "@fontsource/noto-sans-thai": "^5.2.5",
+    "@tsconfig/node20": "^20.1.5",
+    "@types/dotenv": "^8.2.3",
+    "@types/json-schema": "^7.0.15",
+    "@types/node": "^22.15.30",
+    "@types/qs": "^6.14.0",
+    "@woff2/woff2-rs": "^1.0.1",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20.10"
+  }
+}
