@@ -41,6 +41,8 @@ function LobbyPage() {
   const [showSummary, setShowSummary] = useState(false);
 
   const [wordReveal, setWordReveal] = useState(true);
+
+  const [avatarStyle, setAvatarStyle] = useState(searchParams.get('style') || 'pixelArtNeutral');
   
   useEffect(() => {
     if (searchParams.get('name')) {
@@ -50,7 +52,7 @@ function LobbyPage() {
 
   useEffect(() => {
     if (screenName && hasJoined) {
-      socket.emit('join_lobby', { lobbyCode, screenName, avatarSeed });
+      socket.emit('join_lobby', { lobbyCode, screenName, avatarSeed, avatarStyle });
     }
   }, [screenName, lobbyCode, hasJoined]);
 
@@ -236,6 +238,34 @@ function LobbyPage() {
               style={{ padding: '10px', fontSize: '16px' }}
             />
             <br /><br />
+
+            <label>Select Avatar Style</label><br />
+            <select
+              value={avatarStyle}
+              onChange={(e) => setAvatarStyle(e.target.value)}
+              style={{ padding: '10px', fontSize: '16px', marginBottom: '10px' }}
+            >
+              <option value="pixelArtNeutral">Pixel Art Neutral</option>
+              <option value="botttsNeutral">Bottts Neutral</option>
+              <option value="adventurer">Adventurer</option>
+              <option value="avataaars">Avataaars</option>
+              <option value="loreleiNeutral">Lorelei Neutral</option>
+              <option value="funEmoji">Fun Emoji</option>
+              <option value="croodles">Croodles</option>
+              <option value="micah">Micah</option>
+              <option value="lorelei">Lorelei</option>
+              <option value="bottts">Bottts</option>
+              <option value="dylan">Dylan</option>
+              <option value="glass">Glass</option>
+              <option value="icons">Icons</option>
+              <option value="notionists">Notionists</option>
+              <option value="personas">Personas</option>
+              <option value="rings">Rings</option>
+              <option value="shapes">Shapes</option>
+              <option value="thumbs">Thumbs</option>
+            </select>
+            <br />
+
             <input
               type="text"
               placeholder="Customize your avatar (e.g. cool-cat)"
@@ -245,7 +275,7 @@ function LobbyPage() {
             />
             <br /><br />
             <img
-              src={`http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${avatarSeed}`}
+              src={`http://localhost:3001/avatar?seed=${avatarSeed}&style=${avatarStyle}`}
               alt="avatar preview"
               style={{ width: '80px', height: '80px', marginBottom: '10px' }}
             />
@@ -472,7 +502,7 @@ function LobbyPage() {
             style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}
           >
             <img
-              src={`http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${user.avatarSeed}`}
+              src={`http://localhost:3001/avatar?seed=${user.avatarSeed}&style=${user.avatarStyle || 'pixelArtNeutral'}`}
               alt="avatar"
               style={{ width: '40px', height: '40px', marginRight: '10px' }}
             />

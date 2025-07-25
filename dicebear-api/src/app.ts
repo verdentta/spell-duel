@@ -1,3 +1,4 @@
+import { avatarRoute } from './routes/avatar.js';
 import { config } from './config.js';
 import fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -35,6 +36,7 @@ export const app = async () => {
   await app.register(cors);
 
   await app.register(versionRoutes, { versions: await getVersions() });
+  await app.register(avatarRoute);
 
   return app;
 };

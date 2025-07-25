@@ -15,9 +15,10 @@ function LandingPage() {
     }
 
     const lobbyCode = Math.random().toString(36).substring(2, 8);
-    navigate(`/lobby/${lobbyCode}?name=${encodeURIComponent(screenName)}&avatar=${encodeURIComponent(avatarSeed)}`);
+    navigate(`/lobby/${lobbyCode}?name=${encodeURIComponent(screenName)}&avatar=${encodeURIComponent(avatarSeed)}&style=${encodeURIComponent(avatarStyle)}`);
   };
 
+  const [avatarStyle, setAvatarStyle] = useState('pixelArtNeutral');
   const avatarUrl = `http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${encodeURIComponent(avatarSeed)}`;
 
   return (
@@ -33,6 +34,33 @@ function LandingPage() {
         />
         <br /><br />
 
+        <label>Select Avatar Style</label><br />
+        <select
+          value={avatarStyle}
+          onChange={(e) => setAvatarStyle(e.target.value)}
+          style={{ padding: '10px', fontSize: '16px' }}
+        >
+          <option value="pixelArtNeutral">Pixel Art Neutral</option>
+          <option value="botttsNeutral">Bottts Neutral</option>
+          <option value="adventurer">Adventurer</option>
+          <option value="avataaars">Avataaars</option>
+          <option value="loreleiNeutral">Lorelei Neutral</option>
+          <option value="funEmoji">Fun Emoji</option>
+          <option value="croodles">Croodles</option>
+          <option value="micah">Micah</option>
+          <option value="lorelei">Lorelei</option>
+          <option value="bottts">Bottts</option>
+          <option value="dylan">Dylan</option>
+          <option value="glass">Glass</option>
+          <option value="icons">Icons</option>
+          <option value="notionists">Notionists</option>
+          <option value="personas">Personas</option>
+          <option value="rings">Rings</option>
+          <option value="shapes">Shapes</option>
+          <option value="thumbs">Thumbs</option>
+        </select>
+        <br /><br />
+
         <label>Customize Your Avatar Seed</label><br />
         <input
           type="text"
@@ -44,7 +72,7 @@ function LandingPage() {
         <br /><br />
 
         <img
-          src={avatarUrl}
+           src={`http://localhost:3001/avatar?seed=${encodeURIComponent(avatarSeed)}&style=${encodeURIComponent(avatarStyle)}`}
           alt="Your Avatar"
           style={{ width: '100px', height: '100px' }}
         />
