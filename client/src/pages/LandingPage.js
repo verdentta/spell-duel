@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import '../css/LandingPage.css';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function LandingPage() {
   const [screenName, setScreenName] = useState('');
   const [avatarSeed, setAvatarSeed] = useState('default');
   const navigate = useNavigate();
+  const [avatarLoaded, setAvatarLoaded] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -21,7 +23,34 @@ function LandingPage() {
   const [avatarStyle, setAvatarStyle] = useState('pixelArtNeutral');
   const avatarUrl = `http://localhost:3001/7.x/pixel-art-neutral/svg?seed=${encodeURIComponent(avatarSeed)}`;
 
+    const fallingEmojis = useMemo(() => {
+    const emojis = ['🌈', '🍭', '✨', '💖', '🍬', '🟢', '🌟', '🎈', '🎉', '🐣'];
+    return (
+      <div className="falling-stream">
+        {Array.from({ length: 60 }).map((_, i) => {
+          const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+          return (
+            <span
+              key={i}
+              className="falling-emoji"
+              style={{
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 15}s`,
+                animationDuration: `${8 + Math.random() * 5}s`,
+              }}
+            >
+              {emoji}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }, []);
+
   return (
+  <div>
+    {fallingEmojis}
+
     <div style={{ textAlign: 'center', marginTop: '100px' }}>
       <h1>Welcome to Spell Duel</h1>
       <form onSubmit={handleSubmit}>
@@ -72,8 +101,10 @@ function LandingPage() {
         <br /><br />
 
         <img
-           src={`http://localhost:3001/avatar?seed=${encodeURIComponent(avatarSeed)}&style=${encodeURIComponent(avatarStyle)}`}
+          src={`http://localhost:3001/avatar?seed=${encodeURIComponent(avatarSeed)}&style=${encodeURIComponent(avatarStyle)}`}
           alt="Your Avatar"
+          className={`avatar-preview ${avatarLoaded ? 'pop' : ''}`}
+          onLoad={() => setAvatarLoaded(true)}
           style={{ width: '100px', height: '100px' }}
         />
         <br /><br />
@@ -83,7 +114,9 @@ function LandingPage() {
         </button>
       </form>
     </div>
-  );
+  </div>
+);
+
 }
 
 export default LandingPage;
