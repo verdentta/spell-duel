@@ -32,6 +32,7 @@ function LobbyPage() {
   const [revealedLetters, setRevealedLetters] = useState([]);
   const [roundsInput, setRoundsInput] = useState('10');
   const [customWordsInput, setCustomWordsInput] = useState('');
+  const [isCustomMode, setIsCustomMode] = useState(false);
 
   const inputRef = useRef(null);
   const timerIntervalRef = useRef(null);
@@ -97,8 +98,9 @@ function LobbyPage() {
       setCorrectGuesser(null);
       setGameOver(true);
       setRevealedLetters([]);
-      setWordHistory(isCustomMode ? [] : testedWords); // Only store if not custom
-      setShowSummary(!isCustomMode);
+      setWordHistory(testedWords || []); 
+      setShowSummary(true);
+      setIsCustomMode(isCustomMode); // Add this new state so UI knows
     });
 
     return () => {
@@ -354,6 +356,11 @@ function LobbyPage() {
         showSummary ? (
           <>
             <h2>Review Words from Last Game</h2>
+            {isCustomMode && (
+              <div style={{ color: 'gray', marginBottom: 8 }}>
+                (Custom words do not display definitions.)
+              </div>
+            )}
             <ul style={{ textAlign: 'left', maxWidth: '600px', margin: 'auto' }}>
             {wordHistory.map((entry, idx) => (
               typeof entry === 'object' && entry.word ? (
@@ -554,8 +561,7 @@ function LobbyPage() {
                 </button>
               </>
             )}
-
-            {gameOver && <h3>Game Over! Thanks for playing.</h3>}
+         
           </>
         )
       ) : (
@@ -570,12 +576,20 @@ function LobbyPage() {
                 <div className="animated-clock">
                   <svg width="36" height="36" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="16" stroke="#333" strokeWidth="3" fill="#fffbe7" />
-                    <line
-                      x1="18" y1="18"
-                      x2={18 + 12 * Math.sin((60 * timeLeft) * Math.PI / 30)}
-                      y2={18 - 12 * Math.cos((60 * timeLeft) * Math.PI / 30)}
-                      stroke="#f52" strokeWidth="3" strokeLinecap="round"
-                    />
+                    {/* Clock hand (rotates with timeLeft) */}
+                    <g style={{
+                      transform: `rotate(${((20 - timeLeft) / 20) * 360}deg)`,
+                      transformOrigin: '18px 18px'
+                    }}>
+                      <line
+                        x1="18" y1="18"
+                        x2="18" y2="7"
+                        stroke="#f52"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
+                    </g>
+                    {/* Center dot */}
                     <circle cx="18" cy="18" r="2" fill="#f52" />
                   </svg>
                   {timeLeft <= 5 && timeLeft > 0 && (
